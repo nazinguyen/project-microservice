@@ -1,0 +1,45 @@
+name: Deploy to DigitalOcean Droplet
+
+on:
+  push:
+    branches: [ "main" ] # Chạy khi có code mới đẩy lên nhánh main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+
+    # Bước 1: Copy file code từ GitHub sang Server
+    - name: Copy files via SCP
+      uses: appleboy/scp-action@master
+      with:
+        host: ${{ secrets.SERVER_IP }}
+        username: ${{ secrets.SERVER_USER }}
+        password: ${{ secrets.SERVER_PASSWORD }}
+        source: "app.py,Dockerfile"
+        target: "/root/my-banking-app"
+
+    # Bước 2: SSH vào Server và chạy lệnh Build lại
+    - name: Execute remote commands via SSH
+      uses: appleboy/ssh-action@master
+      with:
+        host: ${{ secrets.SERVER_IP }}
+        username: ${{ secrets.SERVER_USER }}
+        password: ${{ secrets.SERVER_PASSWORD }}
+        script: |
+          cd /root/my-banking-app
+          echo "DANG BUILD PHIEN BAN MOI..."
+          
+          # Dừng container cũ (nếu có) và xóa đi để tránh lỗi trùng tên
+          docker stop banking-app || true
+          docker rm banking-app || true
+          
+          # Build lại Image mới từ code vừa copy
+          docker build -t banking-app:latest .
+          
+          # Chạy container mới
+          docker run -d -p 80:5000 --name banking-app banking-app:latest
+          
+          echo "DEPLOY THANH CONG!"
